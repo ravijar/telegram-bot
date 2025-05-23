@@ -2,7 +2,7 @@ import os
 import re
 import logging
 from datetime import datetime
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 from dotenv import load_dotenv
 from dateutil.parser import parse
@@ -33,7 +33,7 @@ def camel_case(text: str) -> str:
     return words[0] + ''.join(word.title() for word in words[1:])
 
 
-def fetch_data() -> List[Dict[str, str]]:
+def fetch_data() -> List[Dict[str, Optional[object]]]:
     """
     Fetch specified column ranges from Google Sheets
     and return list of dictionaries with camelCase keys.
@@ -66,16 +66,27 @@ def fetch_data() -> List[Dict[str, str]]:
         row = {}
         for idx, r in enumerate(RANGES):
             values = all_data[r]
-            if i < len(values) and len(values[i]) > 0:
-                row[headers[idx]] = values[i][0]
-            else:
-                row[headers[idx]] = ''
+            val = values[i][0] if i < len(values) and len(values[i]) > 0 else ''
+            row[headers[idx]] = val
         data_list.append(row)
+
+    for row in data_list:
+        row['checked'] = not (str(row.get('checked', '')).strip().lower() == 'not yet')
+        row['handOver'] = not (str(row.get('handOver', '')).strip().lower() == 'not yet')
+
+        due_date_str = row.get('dueDate', '').strip()
+        if due_date_str:
+            try:
+                row['dueDate'] = parse(due_date_str).date()
+            except Exception:
+                row['dueDate'] = None
+        else:
+            row['dueDate'] = None
 
     return data_list
 
 
-def filter_not_yet(data_list: List[Dict[str, str]]) -> List[Dict[str, str]]:
+def filter_not_yet(data_list: List[Dict[str, Optional[object]]]) -> List[Dict[str, Optional[object]]]:
     """
     Filters rows where checked or handOver is 'not yet' (case-insensitive)
     and dueDate is today or in the future.
@@ -84,42 +95,37 @@ def filter_not_yet(data_list: List[Dict[str, str]]) -> List[Dict[str, str]]:
     today = datetime.now().date()
 
     for row in data_list:
-        checked_val = row.get('checked', '').strip().lower()
-        handover_val = row.get('handOver', '').strip().lower()
-        due_date_str = row.get('dueDate', '').strip()
+        checked_val = row.get('checked', False)
+        handover_val = row.get('handOver', False)
+        due_date = row.get('dueDate')
 
-        due_date_valid = False
-        if due_date_str:
-            try:
-                due_date = parse(due_date_str).date()
-                due_date_valid = due_date >= today
-            except Exception:
-                due_date_valid = False
+        due_date_valid = due_date is not None and due_date >= today
 
-        if (checked_val == 'not yet' or handover_val == 'not yet') and due_date_valid:
+        if (not checked_val or not handover_val) and due_date_valid:
             filtered.append(row)
 
     return filtered
 
 
-def group_by_handle_by(data_list: List[Dict[str, str]]) -> Dict[str, List[Dict[str, str]]]:
+def group_by_handle_by(data_list: List[Dict[str, Optional[object]]]) -> Dict[str, List[Dict[str, Optional[object]]]]:
     """
     Groups data by the 'handleBy' field (lowercased),
     removing 'handleBy' from each row dictionary.
     """
     grouped = {}
     for row in data_list:
-        key = row.get('handleBy', '').strip().lower()
+        key = row.get('handleBy', '')
         if not key:
             continue
 
+        key = str(key).strip().lower()
         row_copy = {k: v for k, v in row.items() if k != 'handleBy'}
         grouped.setdefault(key, []).append(row_copy)
 
     return grouped
 
 
-def print_grouped_data(grouped_data: Dict[str, List[Dict[str, str]]]) -> None:
+def print_grouped_data(grouped_data: Dict[str, List[Dict[str, Optional[object]]]]) -> None:
     """
     Nicely prints grouped data showing handler and assignments.
     Uses the 'assignment' field as the title and excludes it from details.
