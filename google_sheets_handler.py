@@ -141,12 +141,13 @@ def print_grouped_data(grouped_data: Dict[str, List[Dict[str, Optional[object]]]
         print()
 
 
-def main():
+def get_grouped_data() -> Dict[str, List[Dict[str, Optional[object]]]]:
     data_list = fetch_data()
     filtered_data_list = filter_not_yet(data_list)
     grouped_data_list = group_by_handle_by(filtered_data_list)
-    print_grouped_data(grouped_data_list)
+    return grouped_data_list
 
 
 if __name__ == '__main__':
-    main()
+    grouped = get_grouped_data()
+    print_grouped_data(grouped)
