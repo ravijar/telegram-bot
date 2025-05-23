@@ -32,3 +32,6 @@ build/
 
 # pyenv
 .python-version
+
+# other confidential data
+telegram_ids.json
